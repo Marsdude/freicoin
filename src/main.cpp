@@ -2179,7 +2179,7 @@ void ThreadScriptCheck() {
 bool CBlock::ConnectBlock(CValidationState &state, CBlockIndex* pindex, CCoinsViewCache &view, bool fJustCheck)
 {
     // Check it again in case a previous version let a bad block in
-    if (!CheckBlock(state, !fJustCheck, !fJustCheck))
+    if (!CheckBlock(pindex->nHeight, state, !fJustCheck, !fJustCheck))
         return false;
 
     // verify that the view's current state corresponds to the previous block
@@ -2734,7 +2734,7 @@ bool FindUndoPos(CValidationState &state, int nFile, CDiskBlockPos &pos, unsigne
 }
 
 
-bool CBlock::CheckBlock(CValidationState &state, bool fCheckPOW, bool fCheckMerkleRoot) const
+bool CBlock::CheckBlock(int nHeight, CValidationState &state, bool fCheckPOW, bool fCheckMerkleRoot) const
 {
     // These are checks that are independent of context
     // that can be verified before saving an orphan block.
@@ -2920,7 +2920,7 @@ bool ProcessBlock(CValidationState &state, CNode* pfrom, CBlock* pblock, CDiskBl
         return state.Invalid(error("ProcessBlock() : already have block (orphan) %s", hash.ToString().c_str()));
 
     // Preliminary checks
-    if (!pblock->CheckBlock(state))
+    if (!pblock->CheckBlock(INT_MAX, state))
         return error("ProcessBlock() : CheckBlock FAILED");
 
     CBlockIndex* pcheckpoint = Checkpoints::GetLastCheckpoint(mapBlockIndex);
@@ -3322,7 +3322,7 @@ bool VerifyDB() {
         if (!block.ReadFromDisk(pindex))
             return error("VerifyDB() : *** block.ReadFromDisk failed at %d, hash=%s", pindex->nHeight, pindex->GetBlockHash().ToString().c_str());
         // check level 1: verify block validity
-        if (nCheckLevel >= 1 && !block.CheckBlock(state))
+        if (nCheckLevel >= 1 && !block.CheckBlock(pindex->nHeight, state))
             return error("VerifyDB() : *** found bad block at %d, hash=%s\n", pindex->nHeight, pindex->GetBlockHash().ToString().c_str());
         // check level 2: verify undo validity
         if (nCheckLevel >= 2 && pindex) {
