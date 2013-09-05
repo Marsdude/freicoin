@@ -5611,12 +5611,3 @@ public:
         mapOrphanTransactions.clear();
     }
 } instance_of_cmaincleanup;
-
-int ReadWriteAuxPow(CDataStream& s, const boost::shared_ptr<CAuxPow>& auxpow, int nType, int nVersion, CSerActionSerialize ser_action)
-{
-    if (nVersion & BLOCK_VERSION_AUXPOW)
-    {
-        return SerReadWrite(s, *auxpow, nType, nVersion, ser_action);
-    }
-    return 0;
-}
