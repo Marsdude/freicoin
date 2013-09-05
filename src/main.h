@@ -1563,7 +1563,7 @@ public:
         }
 
         // Check the header
-        if (!CheckProofOfWork(GetHash(), nBits))
+        if (!CheckProofOfWork(INT_MAX))
             return error("CBlock::ReadFromDisk() : errors in block header");
 
         return true;
@@ -1848,10 +1848,7 @@ public:
         return (pnext || this == pindexBest);
     }
 
-    bool CheckIndex() const
-    {
-        return CheckProofOfWork(GetBlockHash(), nBits);
-    }
+    bool CheckIndex() const;
 
     enum { nMedianTimeSpan=11 };
 
