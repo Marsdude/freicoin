@@ -246,7 +246,7 @@ Value BlockToValue(CBlock &block)
 	    Object vouto;
 
 	    vouto.push_back(Pair("value",
-	    	(double)block.vtx[i].vout[j].nValue / (double)COIN));
+	    	(double)block.vtx[i].vout[j].nValue / COIN));
 	    vouto.push_back(Pair("scriptPubKey", 
 		block.vtx[i].vout[j].scriptPubKey.ToString().c_str()));
 
