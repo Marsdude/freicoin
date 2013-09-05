@@ -12,6 +12,7 @@
 #include "ui_interface.h"
 #include "checkqueue.h"
 #include <boost/algorithm/string/replace.hpp>
+#include "auxpow.h"
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 
@@ -1066,6 +1067,15 @@ bool CBlock::ReadFromDisk(const CBlockIndex* pindex)
     if (GetHash() != pindex->GetBlockHash())
         return error("CBlock::ReadFromDisk() : GetHash() doesn't match index");
     return true;
+}
+
+void CBlock::SetAuxPow(CAuxPow* pow)
+{
+    if (pow != NULL)
+        nVersion |=  BLOCK_VERSION_AUXPOW;
+    else
+        nVersion &=  ~BLOCK_VERSION_AUXPOW;
+    auxpow.reset(pow);
 }
 
 uint256 static GetOrphanRoot(const CBlockHeader* pblock)
@@ -2340,6 +2350,63 @@ bool CBlock::ConnectBlock(CValidationState &state, CBlockIndex* pindex, CCoinsVi
     for (unsigned int i=0; i<vtx.size(); i++)
         SyncWithWallets(GetTxHash(i), vtx[i], this, true);
 
+    return true;
+}
+
+// Start accepting AUX POW at this block
+// 
+// Even if we do not accept AUX POW ourselves, we can always be the parent chain.
+ 
+int GetAuxPowStartBlock()
+{
+    if (fTestNet)
+        return 0; // Always on testnet
+    else
+        return INT_MAX; // Never on prodnet
+}
+ 
+int GetOurChainID()
+{
+    return 0x0000;
+}
+ 
+bool CBlock::CheckProofOfWork(int nHeight) const
+{
+    if (nHeight >= GetAuxPowStartBlock())
+    {
+        // Prevent same work from being submitted twice:
+        // - this block must have our chain ID
+        // - parent block must not have the same chain ID (see CAuxPow::Check)
+        // - index of this chain in chain merkle tree must be pre-determined (see CAuxPow::Check)
+        if (!fTestNet && nHeight != INT_MAX && GetChainID() != GetOurChainID())
+            return error("CheckProofOfWork() : block does not have our chain ID");
+ 
+        if (auxpow.get() != NULL)
+        {
+            if (!auxpow->Check(GetHash(), GetChainID()))
+                return error("CheckProofOfWork() : AUX POW is not valid");
+            // Check proof of work matches claimed amount
+            if (!::CheckProofOfWork(auxpow->GetParentBlockHash(), nBits))
+                return error("CheckProofOfWork() : AUX proof of work failed");
+        }
+        else
+        {
+            // Check proof of work matches claimed amount
+            if (!::CheckProofOfWork(GetHash(), nBits))
+                return error("CheckProofOfWork() : proof of work failed");
+        }
+    }
+    else
+    {
+        if (auxpow.get() != NULL)
+        {
+            return error("CheckProofOfWork() : AUX POW is not allowed at this block");
+        }
+ 
+        // Check proof of work matches claimed amount
+        if (!::CheckProofOfWork(GetHash(), nBits))
+            return error("CheckProofOfWork() : proof of work failed");
+    }
     return true;
 }
 
@@ -5246,9 +5313,29 @@ bool CheckWork(CBlock* pblock, CWallet& wallet, CReserveKey& reservekey)
     uint256 hash = pblock->GetHash();
     uint256 hashTarget = CBigNum().SetCompact(pblock->nBits).getuint256();
 
-    if (hash > hashTarget)
-        return false;
+    CAuxPow *auxpow = pblock->auxpow.get();
 
+    if (auxpow != NULL)
+    {
+        if (!auxpow->Check(hash, pblock->GetChainID()))
+            return error("AUX POW is not valid");
+
+        if (auxpow->GetParentBlockHash() > hashTarget)
+            return error("AUX POW parent hash %s is not under target %s", auxpow->GetParentBlockHash().GetHex().c_str(), hashTarget.GetHex().c_str());
+
+        //// debug print
+        printf("BitcoinMiner:\n");
+        printf("AUX proof-of-work found  \n     our hash: %s   \n  parent hash: %s  \n       target: %s\n",
+                hash.GetHex().c_str(),
+                auxpow->GetParentBlockHash().GetHex().c_str(),
+                hashTarget.GetHex().c_str());
+    }
+    else
+    {
+        if (hash > hashTarget)
+            return false;
+    }
+ 
     //// debug print
     printf("BitcoinMiner:\n");
     printf("proof-of-work found  \n  hash: %s  \ntarget: %s\n", hash.GetHex().c_str(), hashTarget.GetHex().c_str());
@@ -5492,6 +5579,13 @@ uint64 CTxOutCompressor::DecompressAmount(uint64 x)
     return n;
 }
 
+bool CBlockIndex::CheckIndex() const
+{
+    if (nVersion & BLOCK_VERSION_AUXPOW)
+        return CheckProofOfWork(auxpow->GetParentBlockHash(), nBits);
+    else
+        return CheckProofOfWork(GetBlockHash(), nBits);
+}
 
 class CMainCleanup
 {
@@ -5517,3 +5611,12 @@ public:
         mapOrphanTransactions.clear();
     }
 } instance_of_cmaincleanup;
+
+int ReadWriteAuxPow(CDataStream& s, const boost::shared_ptr<CAuxPow>& auxpow, int nType, int nVersion, CSerActionSerialize ser_action)
+{
+    if (nVersion & BLOCK_VERSION_AUXPOW)
+    {
+        return SerReadWrite(s, *auxpow, nType, nVersion, ser_action);
+    }
+    return 0;
+}

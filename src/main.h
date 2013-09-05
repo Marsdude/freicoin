@@ -11,6 +11,7 @@
 #include "script.h"
 
 #include <list>
+#include <boost/shared_ptr.hpp>
 
 class CWallet;
 class CBlock;
@@ -21,6 +22,8 @@ class CReserveKey;
 class CAddress;
 class CInv;
 class CNode;
+class CBlockIndex;
+class CAuxPow;
 
 struct CBlockIndexWorkComparator;
 
@@ -1216,9 +1219,31 @@ public:
     bool AcceptToMemoryPool(bool fCheckInputs=true, bool fLimitFree=true);
 };
 
+template <typename Stream>
+int ReadWriteAuxPow(Stream& s, const boost::shared_ptr<CAuxPow>& auxpow, int nType, int nVersion, CSerActionSerialize ser_action);
+
+template <typename Stream>
+int ReadWriteAuxPow(Stream& s, boost::shared_ptr<CAuxPow>& auxpow, int nType, int nVersion, CSerActionUnserialize ser_action);
+
+template <typename Stream>
+int ReadWriteAuxPow(Stream& s, const boost::shared_ptr<CAuxPow>& auxpow, int nType, int nVersion, CSerActionGetSerializeSize ser_action);
+
+int ReadWriteAuxPow(CDataStream& s, const boost::shared_ptr<CAuxPow>& auxpow, int nType, int nVersion, CSerActionSerialize ser_action);
 
 
+enum
+{
+    // primary version
+    BLOCK_VERSION_DEFAULT        = (1 << 0),
 
+    // modifiers
+    BLOCK_VERSION_AUXPOW         = (1 << 8),
+
+    // bits allocated for chain ID
+    BLOCK_VERSION_CHAIN_START    = (1 << 16),
+    BLOCK_VERSION_CHAIN_END      = (1 << 30),
+};
+ 
 
 /** Data structure that represents a partial merkle tree.
  *
@@ -1335,6 +1360,7 @@ public:
     unsigned int nTime;
     unsigned int nBits;
     unsigned int nNonce;
+    boost::shared_ptr<CAuxPow> auxpow;
 
     CBlockHeader()
     {
@@ -1350,6 +1376,7 @@ public:
         READWRITE(nTime);
         READWRITE(nBits);
         READWRITE(nNonce);
+        nSerSize += ReadWriteAuxPow(s, auxpow, nType, nVersion, ser_action);
     )
 
     void SetNull()
@@ -1360,6 +1387,7 @@ public:
         nTime = 0;
         nBits = 0;
         nNonce = 0;
+        auxpow.reset();
     }
 
     bool IsNull() const
@@ -1413,6 +1441,15 @@ public:
         vMerkleTree.clear();
     }
 
+    int GetChainID() const
+    {
+        return nVersion / BLOCK_VERSION_CHAIN_START;
+    }
+
+    void SetAuxPow(CAuxPow* pow);
+
+    bool CheckProofOfWork(int nHeight) const;
+
     CBlockHeader GetBlockHeader() const
     {
         CBlockHeader block;
@@ -1422,6 +1459,7 @@ public:
         block.nTime          = nTime;
         block.nBits          = nBits;
         block.nNonce         = nNonce;
+        block.auxpow         = auxpow;
         return block;
     }
 
@@ -1707,7 +1745,9 @@ public:
     unsigned int nBits;
     unsigned int nNonce;
 
-
+    // if this is an aux work block
+    boost::shared_ptr<CAuxPow> auxpow;
+ 
     CBlockIndex()
     {
         phashBlock = NULL;
@@ -1727,6 +1767,7 @@ public:
         nTime          = 0;
         nBits          = 0;
         nNonce         = 0;
+        auxpow.reset();
     }
 
     CBlockIndex(CBlockHeader& block)
@@ -1748,6 +1789,7 @@ public:
         nTime          = block.nTime;
         nBits          = block.nBits;
         nNonce         = block.nNonce;
+        auxpow         = block.auxpow;
     }
 
     CDiskBlockPos GetBlockPos() const {
@@ -1778,6 +1820,7 @@ public:
         block.nTime          = nTime;
         block.nBits          = nBits;
         block.nNonce         = nNonce;
+        block.auxpow         = auxpow;
         return block;
     }
 
@@ -1910,6 +1953,7 @@ public:
         READWRITE(nTime);
         READWRITE(nBits);
         READWRITE(nNonce);
+        ReadWriteAuxPow(s, auxpow, nType, this->nVersion, ser_action);
     )
 
     uint256 GetBlockHash() const
