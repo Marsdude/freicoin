@@ -1230,6 +1230,7 @@ template <typename Stream>
 int ReadWriteAuxPow(Stream& s, const boost::shared_ptr<CAuxPow>& auxpow, int nType, int nVersion, CSerActionGetSerializeSize ser_action);
 
 int ReadWriteAuxPow(CDataStream& s, const boost::shared_ptr<CAuxPow>& auxpow, int nType, int nVersion, CSerActionSerialize ser_action);
+int ReadWriteAuxPow(CDataStream& s, const boost::shared_ptr<CAuxPow>& auxpow, int nType, int nVersion, CSerActionUnserialize ser_action);
 
 
 enum
