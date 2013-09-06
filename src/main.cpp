@@ -5621,7 +5621,7 @@ int ReadWriteAuxPow(CDataStream& s, const boost::shared_ptr<CAuxPow>& auxpow, in
     return 0;
 }
 
-int ReadWriteAuxPow(CDataStream& s, const boost::shared_ptr<CAuxPow>& auxpow, int nType, int nVersion, CSerActionUnserialize ser_action)
+int ReadWriteAuxPow(CDataStream& s, boost::shared_ptr<CAuxPow>& auxpow, int nType, int nVersion, CSerActionUnserialize ser_action)
 {
     if (nVersion & BLOCK_VERSION_AUXPOW)
     {
